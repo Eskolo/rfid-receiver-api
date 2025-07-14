@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using rfid_receiver_api.Models;
 using rfid_receiver_api.Middleware;
 using rfid_receiver_api.Services;
 using rfid_receiver_api.DataTransferObjects;
@@ -23,14 +22,18 @@ public class RfidReadingController : ControllerBase
     [ApiKey]
     public async Task<IActionResult> AddReading([FromBody] RfidReadingDto reading)
     {
-        var (success, errorMessage) = await _rfidService.ProcessReadingAsync(reading);
-
-        if (!success)
+        try
         {
-            if (errorMessage?.Contains("not found") == true)
-                return NotFound(errorMessage);
-
-            return BadRequest(errorMessage);
+            await _rfidService.ProcessReadingAsync(reading);
+        }
+        catch (ArgumentException)
+        {
+            return BadRequest();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while processing reading with id {tagId}", reading.TagHexId);
+            return Problem();
         }
 
         return Ok(new { message = "RFID reading added.", reading });

@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-
 builder.Services.AddControllers().AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
@@ -25,7 +24,6 @@ builder.Services.AddCors(opts =>
     opts.AddPolicy("DevCors", policy =>
     {
         policy
-            // allow any *http* origin you use to host the html page
             .WithOrigins("http://127.0.0.1:5500", "http://localhost:5500")
             .AllowAnyHeader()
             .AllowAnyMethod()
@@ -47,13 +45,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorizationBuilder()
                 .AddPolicy("todo:read-write", p => p.RequireAuthenticatedUser().RequireClaim("scope", "todo:read-write"));
-
-// if (NetworkHelper.HasIpv6Connectivity())
-// {
-//     builder.Services.AddDbContext<AppDbContext>(options =>
-//     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
-//            .UseSnakeCaseNamingConvention());
-// }
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseLazyLoadingProxies().UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))

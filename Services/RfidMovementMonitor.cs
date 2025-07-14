@@ -1,31 +1,26 @@
 namespace rfid_receiver_api.Services;
 
 using System.Collections.Concurrent;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.SignalR;
 using rfid_receiver_api.Hubs;
 using rfid_receiver_api.Models;
 
 public class RfidMovementMonitor : BackgroundService
 {
-    private readonly ConcurrentDictionary<string, TagSeenState> _tags = new();
+    private readonly ILogger<RfidMovementMonitor> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHubContext<RfidHub> _hub;
-    private readonly ILogger<RfidMovementMonitor> _logger;
 
-    // configurable timings
-    private readonly TimeSpan _gracePeriod;    // e.g. 3 s without reads = departed
-    private readonly TimeSpan _cleanupPeriod;  // e.g. remove tag after 5 min idle
-    private readonly TimeSpan _checkInterval;  // how often the sweep runs
+    private readonly ConcurrentDictionary<string, TagSeenState> _tags = new();
+    private readonly TimeSpan _gracePeriod;
+    private readonly TimeSpan _cleanupPeriod;
+    private readonly TimeSpan _checkInterval;
 
-    public RfidMovementMonitor(
-        IServiceScopeFactory scopeFactory,
-        IHubContext<RfidHub> hub,
-        ILogger<RfidMovementMonitor> logger,
-        IConfiguration cfg)
+    public RfidMovementMonitor(IServiceScopeFactory scopeFactory, IHubContext<RfidHub> hub, ILogger<RfidMovementMonitor> logger, IConfiguration cfg)
     {
         _scopeFactory = scopeFactory;
         _hub = hub;
@@ -36,22 +31,30 @@ public class RfidMovementMonitor : BackgroundService
         _checkInterval = TimeSpan.FromMilliseconds(cfg.GetValue("Rfid:CheckMs", 1000));
     }
 
-    public void RegisterRead(string tagId, string name, int locationId, string locationName, int rssi)
+    public void RegisterRead(string tagId, string itemName, int locationId, string locationName, int rssi)
     {
-        var now = DateTime.UtcNow;
-        _tags.AddOrUpdate(tagId,
-            _ => new TagSeenState { FirstSeen = now, LastSeen = now, LocationId = locationId, IsHandled = false },      // new tag
-            (_, state) =>                                                   // existing tag
+        DateTime now = DateTime.UtcNow;
+        _tags.AddOrUpdate(
+            tagId,
+            addValueFactory: _ => new TagSeenState
             {
-                state.LastSeen = now;
-                state.IsHandled = false;        // a fresh scan resets handled flag
-                state.LocationId = locationId;
-                return state;
+                FirstSeen = now,
+                LastSeen = now,
+                LocationId = locationId,
+                IsHandled = false
+            },
+            updateValueFactory: (tagId, existingState) =>
+            {
+                existingState.LastSeen = now;
+                existingState.LocationId = locationId;
+                existingState.IsHandled = false;
+
+                return existingState;
             });
 
-        _hub.Clients.All.SendAsync("ReceiveMessage",
+        _hub.Clients.All.SendAsync(RfidHub.NEW_SCAN_RECEIVED,
                 tagId,
-                name,
+                itemName,
                 locationName,
                 rssi);
     }
@@ -67,9 +70,9 @@ public class RfidMovementMonitor : BackgroundService
 
     private async Task SweepAsync(CancellationToken token)
     {
-        var now = DateTime.UtcNow;
+        DateTime now = DateTime.UtcNow;
 
-        foreach (var entry in _tags.ToArray()) // ToArray → safe against mutation
+        foreach (KeyValuePair<string, TagSeenState> entry in _tags.ToArray())
         {
             var tagId = entry.Key;
             var state = entry.Value;
@@ -92,10 +95,10 @@ public class RfidMovementMonitor : BackgroundService
     {
         try
         {
-            using var scope = _scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            using IServiceScope scope = _scopeFactory.CreateScope();
+            AppDbContext db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            var item = await db.Item.FirstOrDefaultAsync(i => i.Id == tagId, token);
+            Item? item = await db.Item.FirstOrDefaultAsync(i => i.Id == tagId, token);
             if (item == null)
             {
                 _logger.LogWarning("Tag {TagId} not found in DB", tagId);
@@ -103,7 +106,7 @@ public class RfidMovementMonitor : BackgroundService
             }
 
             // toggle
-            item.IsPresent = !item.IsPresent; 
+            item.IsPresent = !item.IsPresent;
             item.LocationId = state.LocationId;
 
             await db.SaveChangesAsync(token);
@@ -111,8 +114,8 @@ public class RfidMovementMonitor : BackgroundService
             // mark as handled so we don’t toggle again until a new scan
             _tags[tagId] = state with { IsHandled = true };
 
-            // notify browser dashboards
-            await _hub.Clients.All.SendAsync("updateStatus", tagId, item.IsPresent, token);
+            // notify signalR connections
+            await _hub.Clients.All.SendAsync(RfidHub.ITEM_STATUS_UPDATE, tagId, item.IsPresent, token);
 
             _logger.LogInformation("Tag {TagId} toggled to {Status}", tagId, item.IsPresent);
         }

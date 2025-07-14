@@ -122,7 +122,7 @@
     });
 
     // ReceiveMessage(tagId, locationId, signalStrength)
-    connection.on("ReceiveMessage", (tagId, name, locationId, signalStrength) => {
+    connection.on("receiveMessage", (tagId, name, locationId, signalStrength) => {
       log(`ReceiveMessage → Tag: ${tagId}, Name: ${name}, Location: ${locationId}, Signal: ${signalStrength}`);
     });
 

@@ -18,8 +18,6 @@ public class ItemController : ControllerBase
         _logger = logger;
     }
 
-    // E28069150000401D63E73D61
-
     [HttpPost("create")]
     public async Task<IActionResult> Create([FromBody] NewItemDto dto)
     {
@@ -45,7 +43,7 @@ public class ItemController : ControllerBase
             {
                 id = item.Id,
                 name = item.Name,
-                location = item.LocationNavigation?.Name,
+                location = item.Location?.Name,
                 isPresent = item.IsPresent
             });
             return Ok(projectedItems);
@@ -63,7 +61,14 @@ public class ItemController : ControllerBase
         try
         {
             var item = await _service.GetByIdAsync(hexId);
-            return Ok(item);
+            var projectedItem =  new
+            {
+                id = item.Id,
+                name = item.Name,
+                location = item.Location?.Name,
+                isPresent = item.IsPresent
+            };
+            return Ok(projectedItem);
         }
         catch (KeyNotFoundException)
         {
@@ -71,7 +76,7 @@ public class ItemController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to retrieve item");
+            _logger.LogError(ex, "Failed to retrieve item with id '{tagId}'", hexId);
             return Problem();
         }
     }
@@ -90,7 +95,7 @@ public class ItemController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Update failed");
+            _logger.LogError(ex, "Update failed for item with tadId '{tagId}'", dto.TagHexId);
             return Problem();
         }
     }
