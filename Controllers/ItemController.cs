@@ -1,0 +1,117 @@
+using Microsoft.AspNetCore.Mvc;
+using rfid_receiver_api.DataTransferObjects;
+using rfid_receiver_api.Models;
+using rfid_receiver_api.Services;
+
+namespace rfid_receiver_api.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class ItemController : ControllerBase
+{
+    private readonly IItemService _service;
+    private readonly ILogger<ItemController> _logger;
+
+    public ItemController(IItemService service, ILogger<ItemController> logger)
+    {
+        _service = service;
+        _logger = logger;
+    }
+
+    // E28069150000401D63E73D61
+
+    [HttpPost("create")]
+    public async Task<IActionResult> Create([FromBody] NewItemDto dto)
+    {
+        try
+        {
+            var item = await _service.CreateAsync(dto);
+            return CreatedAtAction(nameof(GetById), new { hexId = item.Id }, item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Create failed");
+            return Problem(ex.Message);
+        }
+    }
+
+    [HttpGet("getallitems")]
+    public async Task<IActionResult> GetAll()
+    {
+        try
+        {
+            var items = await _service.GetAllAsync();
+            var projectedItems = items.Select(item => new
+            {
+                id = item.Id,
+                name = item.Name,
+                location = item.LocationNavigation?.Name,
+                isPresent = item.IsPresent
+            });
+            return Ok(projectedItems);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve items");
+            return Problem("Failed to retrieve items");
+        }
+    }
+
+    [HttpGet("{hexId}")]
+    public async Task<IActionResult> GetById(string hexId)
+    {
+        try
+        {
+            var item = await _service.GetByIdAsync(hexId);
+            return Ok(item);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve item");
+            return Problem();
+        }
+    }
+
+    [HttpPut("update")]
+    public async Task<IActionResult> Update([FromBody] NewItemDto dto)
+    {
+        try
+        {
+            var item = await _service.UpdateAsync(dto.TagHexId, dto);
+            return Ok(item);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Update failed");
+            return Problem();
+        }
+    }
+
+    [HttpDelete("delete/{hexId}")]
+    public async Task<IActionResult> Delete(string hexId)
+    {
+        try
+        {
+            await _service.DeleteAsync(hexId);
+            return NoContent();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Delete failed");
+            return Problem();
+        }
+    }
+}
+
