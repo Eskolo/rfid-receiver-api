@@ -3,7 +3,6 @@ using rfid_receiver_api.Middleware;
 using rfid_receiver_api.Models;
 using Npgsql.EntityFrameworkCore.PostgreSQL;
 using rfid_receiver_api.Hubs;
-using rfid_receiver_api.Helper;
 using rfid_receiver_api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
