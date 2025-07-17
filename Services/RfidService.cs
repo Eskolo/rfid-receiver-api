@@ -41,7 +41,7 @@ public class RfidService : IRfidService
             ItemId = reading.TagHexId,
             LocationId = reading.LocationId,
             ScannedAt = reading.Timestamp,
-            Rssi = reading.SiganlStren
+            Rssi = reading.Rssi
         };
 
         var entry = _db.Scan.Add(scan);
@@ -66,6 +66,6 @@ public class RfidService : IRfidService
             scan.Rssi);
 
         _logger.LogInformation("Tag {TagId} read at Location {LocationId} with Signal {Signal}",
-            reading.TagHexId, reading.LocationId, reading.SiganlStren);
+            reading.TagHexId, reading.LocationId, reading.Rssi);
     }
 }

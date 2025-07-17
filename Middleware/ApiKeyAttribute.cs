@@ -6,11 +6,13 @@ namespace rfid_receiver_api.Middleware;
 public class ApiKeyAttribute : Attribute, IAsyncActionFilter
 {
     private const string ApiKeyHeaderName = "x-api-key";
-    private const string ValidApiKey = "arsch";
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        if (!context.HttpContext.Request.Headers.TryGetValue(ApiKeyHeaderName, out var key) || key != ValidApiKey)
+        var configuration = context.HttpContext.RequestServices.GetService(typeof(IConfiguration)) as IConfiguration;
+        var validApiKey = configuration?["ApiKeys:RFID"] ?? throw new InvalidOperationException("API key configuration is missing.");
+
+        if (!context.HttpContext.Request.Headers.TryGetValue(ApiKeyHeaderName, out var key) || key != validApiKey)
         {
             context.Result = new UnauthorizedResult();
             return;

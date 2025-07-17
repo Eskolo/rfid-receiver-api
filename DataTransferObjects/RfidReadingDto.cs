@@ -5,5 +5,5 @@ public class RfidReadingDto
     public required string TagHexId { get; set; }
     public required int LocationId { get; set; }
     public required DateTime Timestamp { get; set; }
-    public int SiganlStren { get; set; }
+    public int Rssi { get; set; }
 }
