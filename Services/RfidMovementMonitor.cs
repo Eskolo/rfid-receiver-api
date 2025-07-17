@@ -102,6 +102,7 @@ public class RfidMovementMonitor : BackgroundService
             if (item == null)
             {
                 _logger.LogWarning("Tag {TagId} not found in DB", tagId);
+                _tags.TryRemove(tagId, out _);
                 return;
             }
 

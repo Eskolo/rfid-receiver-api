@@ -24,7 +24,14 @@ public class ItemController : ControllerBase
         try
         {
             var item = await _service.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { hexId = item.Id }, item);
+            var projectedItem =  new
+            {
+                id = item.Id,
+                name = item.Name,
+                location = item.Location?.Name,
+                isPresent = item.IsPresent
+            };
+            return CreatedAtAction(nameof(GetById), new { hexId = projectedItem.id }, projectedItem);
         }
         catch (Exception ex)
         {
