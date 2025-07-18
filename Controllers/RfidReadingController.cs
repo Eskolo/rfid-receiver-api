@@ -26,9 +26,9 @@ public class RfidReadingController : ControllerBase
         {
             await _rfidService.ProcessReadingAsync(reading);
         }
-        catch (ArgumentException)
+        catch (ArgumentException ex)
         {
-            return BadRequest();
+            return BadRequest(new { message = ex.Message });
         }
         catch (KeyNotFoundException ex)
         {
