@@ -30,7 +30,7 @@ public class RfidService : IRfidService
         _monitor = monitor;
     }
 
-    
+
     public async Task ProcessReadingAsync(RfidReadingDto reading)
     {
         if (reading == null || string.IsNullOrEmpty(reading.TagHexId) || reading.LocationId == 0)
@@ -43,6 +43,27 @@ public class RfidService : IRfidService
             ScannedAt = reading.Timestamp,
             Rssi = reading.Rssi
         };
+
+        // Validate that item and location exist
+        Item? item = await _db.Item.FindAsync(scan.ItemId);
+        Location? location = await _db.Location.FindAsync(scan.LocationId);
+
+        if (location == null)
+            _logger.LogWarning("Location with ID {LocationId} not found for scan.", scan.LocationId);
+        if (item == null)
+            _logger.LogWarning("Item with ID {ItemId} not found for scan.", scan.ItemId);
+
+        _monitor.RegisterRead(
+            scan.ItemId,
+            item?.Name ?? "Unknown",
+            scan.LocationId,
+            location?.Name ?? "Unknown",
+            scan.Rssi);
+
+        if (location == null)
+            throw new KeyNotFoundException("Location not found for the provided location id.");
+        if (item == null)
+            throw new KeyNotFoundException("Item not found for the read tag id.");
 
         var entry = _db.Scan.Add(scan);
         await _db.SaveChangesAsync();
@@ -57,13 +78,6 @@ public class RfidService : IRfidService
             _logger.LogCritical("Newly added entry is not retreivable by its id!");
             throw new KeyNotFoundException("Added scan could not be loaded again!");
         }
-
-        _monitor.RegisterRead(
-            scan.ItemId,
-            scan.Item?.Name ?? "Unknown",
-            scan.LocationId,
-            scan.Location?.Name ?? "Unknown",
-            scan.Rssi);
 
         _logger.LogInformation("Tag {TagId} read at Location {LocationId} with Signal {Signal}",
             reading.TagHexId, reading.LocationId, reading.Rssi);

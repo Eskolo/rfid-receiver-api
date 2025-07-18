@@ -30,6 +30,11 @@ public class RfidReadingController : ControllerBase
         {
             return BadRequest();
         }
+        catch (KeyNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "Item or Location not found for reading with id {tagId}", reading.TagHexId);
+            return NotFound(new { message = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error while processing reading with id {tagId}", reading.TagHexId);

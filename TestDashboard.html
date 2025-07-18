@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RFID Status Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #f9f9f9; margin: 0; padding: 1rem; }
+    h2 { margin-top: 0 }
+
+    .controls {
+      margin-bottom: 1rem;
+      padding: 1rem;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 34px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 26px;
+      width: 26px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: #2196F3;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+    }
+
+    .modal-content {
+      background-color: #fefefe;
+      margin: 15% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      border-radius: 8px;
+      width: 400px;
+      max-width: 90%;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: bold;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+
+    .form-group input:disabled {
+      background-color: #f5f5f5;
+      color: #666;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 1rem;
+    }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .btn-primary {
+      background-color: #007bff;
+      color: white;
+    }
+
+    .btn-secondary {
+      background-color: #6c757d;
+      color: white;
+    }
+
+    .btn:hover {
+      opacity: 0.8;
+    }
+
+    table {
+      width: 100%; border-collapse: collapse; margin-bottom: 1rem;
+    }
+    th, td {
+      border: 1px solid #ccc; padding: 0.5rem; text-align: left;
+    }
+    th { background: #eee; }
+
+    .present { color: green; font-weight: bold; }
+    .absent { color: red; font-weight: bold; }
+
+    #console {
+      height: 200px;
+      overflow-y: auto;
+      background: #000;
+      color: #0f0;
+      font-family: monospace;
+      font-size: 0.85rem;
+      padding: 0.5rem;
+      border: 1px solid #333;
+    }
+    pre { margin: 0 }
+  </style>
+</head>
+<body>
+  <h2>RFID Status Dashboard</h2>
+
+  <div class="controls">
+    <label for="creationMode">Creation Mode</label>
+    <label class="toggle-switch">
+      <input type="checkbox" id="creationMode">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <table id="itemsTable">
+    <thead>
+      <tr>
+        <th>Tag ID</th>
+        <th>Name</th>
+        <th>Location ID</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="itemsBody"></tbody>
+  </table>
+
+  <div id="createModal" class="modal">
+    <div class="modal-content">
+      <h3>Create New Item</h3>
+      <form id="createForm">
+        <div class="form-group">
+          <label for="itemId">Tag ID</label>
+          <input type="text" id="itemId" name="tagHexId" readonly>
+        </div>
+        <div class="form-group">
+          <label for="locationId">Location ID</label>
+          <input type="text" id="locationId" name="locationId" readonly>
+        </div>
+        <div class="form-group">
+          <label for="itemName">Item Name</label>
+          <input type="text" id="itemName" name="name" required>
+        </div>
+        <div class="button-group">
+          <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="console"></div>
+
+  <script>
+    const consoleDiv = document.getElementById("console");
+    const itemsBody = document.getElementById("itemsBody");
+    const itemMap = {}; // tagId → <tr> row
+    const baseUrl = "http://localhost:5202";
+    const creationModeToggle = document.getElementById("creationMode");
+    const createModal = document.getElementById("createModal");
+    const createForm = document.getElementById("createForm");
+    let isCreateModalOpen = false;
+    let processedUnknownTags = new Set(); // Track tags we've already shown modal for
+
+    function log(msg) {
+      const line = document.createElement("pre");
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      consoleDiv.appendChild(line);
+      consoleDiv.scrollTop = consoleDiv.scrollHeight;
+    }
+
+    function createRow(item) {
+        const tr = document.createElement("tr");
+        tr.dataset.tagId = item.id;
+
+        const tdId = document.createElement("td");
+        tdId.textContent = item.id;
+
+        const tdName = document.createElement("td");
+        tdName.textContent = item.name;
+
+        const tdLoc = document.createElement("td");
+        tdLoc.textContent = item.location;
+
+        const tdStatus = document.createElement("td");
+        tdStatus.textContent = item.isPresent ? "Present" : "Absent";
+        tdStatus.className = item.isPresent ? "present" : "absent";
+        tdStatus.classList.add("statusCell");
+
+        tr.appendChild(tdId);
+        tr.appendChild(tdName);
+        tr.appendChild(tdLoc);
+        tr.appendChild(tdStatus);
+
+        itemsBody.appendChild(tr);
+        itemMap[item.id] = tr;
+    }
+
+    function showCreateModal(tagId, locationId) {
+      document.getElementById("itemId").value = tagId;
+      document.getElementById("locationId").value = locationId || "1"; // Ensure default value
+      document.getElementById("itemName").value = "";
+      createModal.style.display = "block";
+      isCreateModalOpen = true;
+      document.getElementById("itemName").focus();
+    }
+
+    function closeCreateModal() {
+      createModal.style.display = "none";
+      isCreateModalOpen = false;
+      processedUnknownTags.clear(); // Reset when modal is closed
+    }
+
+    function updateCreateModalFields(tagId, locationId) {
+      document.getElementById("itemId").value = tagId;
+      document.getElementById("locationId").value = locationId || "1"; // Ensure default value
+    }
+
+    createForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData(createForm);
+      const locationIdValue = formData.get("locationId");
+      
+      // Parse locationId as integer, default to 1 if invalid
+      let parsedLocationId = 1;
+      if (locationIdValue && locationIdValue.trim() !== "") {
+        const parsed = parseInt(locationIdValue, 10);
+        if (!isNaN(parsed)) {
+          parsedLocationId = parsed;
+        }
+      }
+
+      const requestData = {
+        tagHexId: formData.get("tagHexId"),
+        locationId: parsedLocationId,
+        name: formData.get("name"),
+        isInside: true // Default to true for new items
+      };
+
+      try {
+        const response = await fetch(baseUrl + "/api/item/create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(requestData)
+        });
+
+        if (response.ok) {
+          const newItem = await response.json();
+          createRow(newItem);
+          log(`Item created successfully: ${newItem.name} (${newItem.id})`);
+          closeCreateModal();
+          // Reload items to ensure consistency
+          await loadItems();
+        } else {
+          const errorText = await response.text();
+          log(`Failed to create item: ${response.status} - ${errorText}`);
+        }
+      } catch (error) {
+        log(`Error creating item: ${error.message}`);
+      }
+    });
+
+    // Close modal when clicking outside
+    window.addEventListener("click", (event) => {
+      if (event.target === createModal) {
+        closeCreateModal();
+      }
+    });
+
+    async function loadItems() {
+      try {
+        const res = await fetch(baseUrl + "/api/item/GetAllItems");
+        const json = await res.json();
+        const items = json["$values"];
+        itemsBody.innerHTML = "";
+        items.forEach(item => createRow(item));
+        log(`Loaded ${items.length} items`);
+      } catch (err) {
+        log(`Failed to fetch items: ${err.message}`);
+      }
+    }
+
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl(baseUrl + "/rfidHub")
+      .withAutomaticReconnect()
+      .configureLogging(signalR.LogLevel.Information)
+      .build();
+
+    // updateStatus(tagId, isPresent)
+    connection.on("updateStatus", (tagId, isPresent) => {
+      const row = itemMap[tagId];
+      if (row) {
+        const statusCell = row.querySelector(".statusCell");
+        statusCell.textContent = isPresent ? "Present" : "Absent";
+        statusCell.className = "statusCell " + (isPresent ? "present" : "absent");
+        log(`Status updated: ${tagId} → ${isPresent ? "Present" : "Absent"}`);
+      } else {
+        log(`Tag not found in list: ${tagId}`);
+      }
+    });
+
+    // ReceiveMessage(tagId, locationId, signalStrength)
+    connection.on("receiveMessage", (tagId, name, locationId, signalStrength) => {
+      log(`ReceiveMessage → Tag: ${tagId}, Name: ${name}, Location: ${locationId}, Signal: ${signalStrength}`);
+      
+      // Handle unknown tags in creation mode
+      if (creationModeToggle.checked && name === "Unknown") {
+        if (!processedUnknownTags.has(tagId)) {
+          // First time seeing this unknown tag
+          if (!isCreateModalOpen) {
+            showCreateModal(tagId, locationId);
+            processedUnknownTags.add(tagId);
+          }
+        } else if (isCreateModalOpen) {
+          // Update existing modal with new scan data
+          updateCreateModalFields(tagId, locationId);
+        }
+      }
+    });
+
+    connection.onclose(err => log(`Connection closed: ${err?.message || "unknown"}`));
+
+    async function startSignalR() {
+      try {
+        await connection.start();
+        log("Connected to SignalR hub");
+      } catch (err) {
+        log(`SignalR connection failed: ${err.message}`);
+        setTimeout(startSignalR, 5000);
+      }
+    }
+
+    loadItems();
+    startSignalR();
+  </script>
+</body>
+</html>
