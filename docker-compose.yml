@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: rfid-postgres
+    environment:
+      POSTGRES_DB: rfiddb
+      POSTGRES_USER: rfiduser
+      POSTGRES_PASSWORD: rfidpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rfiduser -d rfiddb"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  rfid-migration:
+    build:
+      context: .
+      dockerfile: Dockerfile.migration
+    container_name: rfid-migration
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=rfiddb;Username=rfiduser;Password=rfidpassword
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  rfid-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rfid-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=rfiddb;Username=rfiduser;Password=rfidpassword
+      - Auth0__Domain=${AUTH0_DOMAIN}
+      - Auth0__Audience=${AUTH0_AUDIENCE}
+      - Rfid__GraceSeconds=3
+      - Rfid__CleanupMinutes=5
+      - Rfid__CheckMs=1000
+      - ApiKeys__RFID=${RFID_API_KEY}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rfid-migration:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

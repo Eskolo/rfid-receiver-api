@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using rfid_receiver_api.Middleware;
 
 namespace rfid_receiver_api.Controllers;
 
@@ -25,7 +26,15 @@ public class ArschController : ControllerBase
     [HttpGet("securearsch")]
     public IActionResult SecureGetArsch()
     {
-        _logger.LogInformation("Arsch endpoint was called.");
-        return Ok("Arsch is here!");
+        _logger.LogInformation("Secure Arsch endpoint was called.");
+        return Ok("Secure Arsch is here!");
+    }
+
+    [HttpGet("apikeygetarsch")]
+    [ApiKey]
+    public IActionResult ApiKeyGetArsch()
+    {
+        _logger.LogInformation("Api-Key Arsch endpoint was called.");
+        return Ok("Api-Key Arsch is here!");
     }
 }

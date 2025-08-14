@@ -1,0 +1,41 @@
+# Use the official .NET 9.0 SDK image for migrations
+FROM mcr.microsoft.com/dotnet/sdk:9.0
+WORKDIR /app
+
+# Copy csproj and restore dependencies
+COPY *.csproj ./
+RUN dotnet restore
+
+# Copy everything needed for migrations
+COPY . ./
+
+# Install EF Core tools
+RUN dotnet tool install --global dotnet-ef
+ENV PATH="$PATH:/root/.dotnet/tools"
+
+# Create a script to run migrations
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "Starting database initialization..."\n\
+echo "Waiting for PostgreSQL to be ready..."\n\
+\n\
+# Wait for database to be ready\n\
+until pg_isready -h postgres -p 5432 -U rfiduser; do\n\
+  echo "PostgreSQL is unavailable - sleeping"\n\
+  sleep 2\n\
+done\n\
+\n\
+echo "PostgreSQL is up - executing migrations"\n\
+\n\
+# Run Entity Framework migrations\n\
+dotnet ef database update --connection "$ConnectionStrings__DefaultConnection"\n\
+\n\
+echo "Database migration completed successfully"' > /app/migrate.sh
+
+RUN chmod +x /app/migrate.sh
+
+# Install postgresql-client for pg_isready
+RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
+
+# Run migrations
+CMD ["/app/migrate.sh"]
