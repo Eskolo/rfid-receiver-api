@@ -1,10 +1,8 @@
-using Microsoft.EntityFrameworkCore;
-using rfid_receiver_api.Middleware;
-using rfid_receiver_api.Models;
-using Npgsql.EntityFrameworkCore.PostgreSQL;
-using rfid_receiver_api.Hubs;
-using rfid_receiver_api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using rfid_receiver_api.Hubs;
+using rfid_receiver_api.Models;
+using rfid_receiver_api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,11 +32,11 @@ builder.Services.AddCors(opts =>
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
      .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, c =>
      {
-         c.Authority = $"https://{builder.Configuration["Auth0:Domain"]}";
+         c.Authority = $"https://{builder.Configuration["Auth:Domain"]}";
          c.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
          {
-             ValidAudience = builder.Configuration["Auth0:Audience"],
-             ValidIssuer = $"{builder.Configuration["Auth0:Domain"]}"
+             ValidAudience = builder.Configuration["Auth:Audience"],
+             ValidIssuer = $"{builder.Configuration["Auth:Domain"]}"
          };
      });
 
@@ -63,6 +61,22 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+}
+
+// Apply database migrations automatically on startup
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    try
+    {
+        await context.Database.EnsureCreatedAsync();
+       //await context.Database.MigrateAsync();
+    }
+    catch (Exception ex)
+    {
+        // Log the error but continue - the database might not be ready yet
+        Console.WriteLine($"Migration failed: {ex.Message}");
+    }
 }
 
 await SeedData.EnsureSeededAsync(app.Services);

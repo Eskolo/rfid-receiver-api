@@ -22,8 +22,8 @@ public class ArschController : ControllerBase
         return Ok("Arsch is here!");
     }
 
-    [Authorize]
     [HttpGet("securearsch")]
+    [Authorize]
     public IActionResult SecureGetArsch()
     {
         _logger.LogInformation("Secure Arsch endpoint was called.");

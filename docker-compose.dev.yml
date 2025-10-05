@@ -1,20 +1,24 @@
+# Development Docker Compose configuration
+# Use: docker compose -f docker-compose.dev.yml up -d
+
 networks:
   default:
-  traefik:
-    external: true
+
+volumes:
+  postgres_data_dev:
 
 services:
   postgres:
     image: postgres:16
-    container_name: rfid-postgres
+    container_name: rfid-postgres-dev
     environment:
       POSTGRES_DB: rfiddb
       POSTGRES_USER: rfiduser
       POSTGRES_PASSWORD: rfidpassword
-    # ports:
-    #   - "5432:5432"
+    ports:
+      - "5432:5432"
     volumes:
-      - ./volumes/db:/var/lib/postgresql/data
+      - postgres_data_dev:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rfiduser -d rfiddb"]
       interval: 30s
@@ -23,10 +27,12 @@ services:
       start_period: 30s
 
   rfid-api:
-    image: connectaregensburg/rfid-receiver-api:latest
-    container_name: rfid-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rfid-api-dev
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=rfiddb;Username=rfiduser;Password=rfidpassword
       - Auth__Domain=${AUTH_DOMAIN}
@@ -35,21 +41,11 @@ services:
       - Rfid__CleanupMinutes=5
       - Rfid__CheckMs=1000
       - ApiKeys__RFID=${RFID_API_KEY}
-    # ports:
-    #   - "8080:8080"
-
-    # add labels to connect to traefik
-    labels:
-      - "traefik.enable=true"
-      #! replace receiver-api with your service name
-      - "traefik.http.routers.receiver-api.rule=Host(⁠ ${CONTAINER_DOMAIN} ⁠)"
-      - "traefik.http.routers.receiver-api.entrypoints=websecure"
-
+    ports:
+      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
-
     networks:
-    - traefik # add to traefik network
-    - default # add to default (stack internal) network
+      - default

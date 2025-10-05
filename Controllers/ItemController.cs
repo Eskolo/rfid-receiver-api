@@ -1,10 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using rfid_receiver_api.DataTransferObjects;
-using rfid_receiver_api.Models;
 using rfid_receiver_api.Services;
 
 namespace rfid_receiver_api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class ItemController : ControllerBase
@@ -24,7 +25,7 @@ public class ItemController : ControllerBase
         try
         {
             var item = await _service.CreateAsync(dto);
-            var projectedItem =  new
+            var projectedItem = new
             {
                 id = item.Id,
                 name = item.Name,
@@ -68,7 +69,7 @@ public class ItemController : ControllerBase
         try
         {
             var item = await _service.GetByIdAsync(hexId);
-            var projectedItem =  new
+            var projectedItem = new
             {
                 id = item.Id,
                 name = item.Name,
