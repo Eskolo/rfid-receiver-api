@@ -35,7 +35,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=rfiddb;Username=rfiduser;Password=rfidpassword
-      - Auth__Domain=${AUTH_DOMAIN}
+      - Auth__Authority=${AUTH_AUTHORITY}
       - Auth__Audience=${AUTH_AUDIENCE}
       - Rfid__GraceSeconds=3
       - Rfid__CleanupMinutes=5
@@ -49,3 +49,5 @@ services:
     restart: unless-stopped
     networks:
       - default
+    extra_hosts:
+      - "localhost:host-gateway"

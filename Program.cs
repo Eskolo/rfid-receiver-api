@@ -30,18 +30,23 @@ builder.Services.AddCors(opts =>
 });
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-     .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, c =>
-     {
-         c.Authority = $"https://{builder.Configuration["Auth:Domain"]}";
-         c.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
-         {
-             ValidAudience = builder.Configuration["Auth:Audience"],
-             ValidIssuer = $"{builder.Configuration["Auth:Domain"]}"
-         };
-     });
+    .AddJwtBearer(options =>
+    {
+        options.Authority = builder.Configuration["Auth:Authority"];
+        options.Audience = builder.Configuration["Auth:Audience"];
 
-builder.Services.AddAuthorizationBuilder()
-                .AddPolicy("todo:read-write", p => p.RequireAuthenticatedUser().RequireClaim("scope", "todo:read-write"));
+        if (builder.Environment.IsDevelopment())
+        {
+            options.RequireHttpsMetadata = false;
+        }
+
+        options.TokenValidationParameters.ValidateIssuer = true;
+        options.TokenValidationParameters.ValidateAudience = true;
+        options.TokenValidationParameters.ValidateLifetime = true;
+        options.TokenValidationParameters.ValidateIssuerSigningKey = true;
+    });
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseLazyLoadingProxies().UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
@@ -70,7 +75,7 @@ using (var scope = app.Services.CreateScope())
     try
     {
         await context.Database.EnsureCreatedAsync();
-       //await context.Database.MigrateAsync();
+        //await context.Database.MigrateAsync();
     }
     catch (Exception ex)
     {
